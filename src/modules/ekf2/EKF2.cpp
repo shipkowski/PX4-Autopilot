@@ -569,7 +569,7 @@ void EKF2::PublishGlobalPosition(const hrt_abstime &timestamp)
 				float delta_xy[2];
 				_ekf.get_posNE_reset(delta_xy, &global_pos.lat_lon_reset_counter);
 
-				global_pos.alt = -position(2) + _ekf.global_origin_altitude(); // Altitude AMSL in meters
+				global_pos.alt = -position(2) + _ekf.getEkfGlobalOriginAltitude(); // Altitude AMSL in meters
 				global_pos.alt_ellipsoid = filter_altitude_ellipsoid(global_pos.alt);
 
 				// global altitude has opposite sign of local down position
@@ -582,7 +582,7 @@ void EKF2::PublishGlobalPosition(const hrt_abstime &timestamp)
 
 				if (_ekf.isTerrainEstimateValid()) {
 					// Terrain altitude in m, WGS84
-					global_pos.terrain_alt = _ekf.global_origin_altitude() - _ekf.getTerrainVertPos();
+					global_pos.terrain_alt = _ekf.getEkfGlobalOriginAltitude() - _ekf.getTerrainVertPos();
 					global_pos.terrain_alt_valid = true;
 
 				} else {
@@ -722,7 +722,7 @@ void EKF2::PublishLocalPosition(const hrt_abstime &timestamp)
 		lpos.ref_timestamp = _ekf.global_origin().timestamp;
 		lpos.ref_lat = math::degrees(_ekf.global_origin().lat_rad); // Reference point latitude in degrees
 		lpos.ref_lon = math::degrees(_ekf.global_origin().lon_rad); // Reference point longitude in degrees
-		lpos.ref_alt = _ekf.global_origin_altitude();
+		lpos.ref_alt = _ekf.getEkfGlobalOriginAltitude();           // Reference point in MSL altitude meters
 		lpos.xy_global = true;
 		lpos.z_global = true;
 
