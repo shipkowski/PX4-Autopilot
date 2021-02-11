@@ -1,6 +1,6 @@
 ############################################################################
 #
-#   Copyright (c) 2017 PX4 Development Team. All rights reserved.
+#   Copyright (c) 2017, 2021 PX4 Development Team. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -48,7 +48,7 @@ if(NOT "${PX4_BOARD_LABEL}" MATCHES  "canbootloader")
 	set(SW_MAJOR ${uavcanblid_sw_version_major})
 	set(SW_MINOR ${uavcanblid_sw_version_minor})
 
-	string(REPLACE "\"" "" HWNAME ${uavcanblid_name})
+	math(EXPR HWBOARD_ID "(${HW_MAJOR} << 8) + ${HW_MINOR}")
 
 	execute_process(
 		COMMAND git rev-list HEAD --max-count=1 --abbrev=8 --abbrev-commit
@@ -60,7 +60,7 @@ if(NOT "${PX4_BOARD_LABEL}" MATCHES  "canbootloader")
 	if ("${uavcanbl_git_desc}" STREQUAL "")
 		set(uavcanbl_git_desc ffffffff)
 	endif()
-	set(uavcan_bl_imange_name ${HWNAME}-${HW_MAJOR}.${HW_MINOR}-${SW_MAJOR}.${SW_MINOR}.${uavcanbl_git_desc}.uavcan.bin)
+	set(uavcan_bl_imange_name ${HWBOARD_ID}-${SW_MAJOR}.${SW_MINOR}.${uavcanbl_git_desc}.uavcan.bin)
 	message(STATUS "Generating UAVCAN Bootable as ${uavcan_bl_imange_name}")
 	add_custom_command(OUTPUT ${uavcan_bl_imange_name}
 		COMMAND

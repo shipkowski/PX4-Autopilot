@@ -38,6 +38,7 @@
 
 #include <cstdlib>
 #include <cstring>
+#include <cctype>
 #include <fcntl.h>
 #include <dirent.h>
 #include <pthread.h>
@@ -283,6 +284,12 @@ UavcanServers::run(pthread_addr_t)
 	prctl(PR_SET_NAME, "uavcan fw srv", 0);
 
 	Lock lock(_subnode_mutex);
+
+	/*
+	Check for firmware in the root directory, move it to appropriate location on
+	the SD card, as defined by the APDesc.
+	*/
+	migrateFWFromRoot(UAVCAN_FIRMWARE_PATH, UAVCAN_SD_ROOT_PATH);
 
 	/*
 	Copy any firmware bundled in the ROMFS to the appropriate location on the
@@ -1205,6 +1212,85 @@ UavcanServers::unpackFwFromROMFS(const char *sd_path, const char *romfs_path)
 	}
 
 	(void)closedir(romfs_dir);
+}
+
+void
+UavcanServers::migrateFWFromRoot(const char *sd_path, const char *sd_root_path)
+{
+	/*
+	Copy Any bin files with APDes into appropriate location on SD card
+	overriding any firmware the user has already loaded there.
+
+	The SD firmware directory structure is along the lines of:
+
+	  /fs/microsd/ufw
+	     nnnnn.bin - where n is the board_id
+	*/
+
+	const size_t maxlen = UAVCAN_MAX_PATH_LENGTH;
+	const size_t sd_root_path_len = strlen(sd_root_path);
+	struct stat sb;
+	int rv;
+	char dstpath[maxlen + 1];
+	char srcpath[maxlen + 1];
+
+	DIR *const sd_root_dir = opendir(sd_root_path);
+
+	if (!sd_root_dir) {
+		return;
+	}
+
+	if (stat(sd_path, &sb) != 0 || !S_ISDIR(sb.st_mode)) {
+		rv = mkdir(sd_path, S_IRWXU | S_IRWXG | S_IRWXO);
+
+		if (rv != 0) {
+			PX4_ERR("dev: couldn't create '%s'", sd_path);
+			return;
+		}
+	}
+
+	// Iterate over all bin files in root directory
+	struct dirent *dev_dirent = NULL;
+
+	while ((dev_dirent = readdir(sd_root_dir)) != nullptr) {
+
+		uavcan_posix::FirmwareVersionChecker::AppDescriptor descriptor;
+
+		// Looking for all uavcan.bin files.
+
+		if (DIRENT_ISFILE(dev_dirent->d_type) && strstr(dev_dirent->d_name, ".bin") != nullptr) {
+
+			// Make sure the path fits
+
+			size_t filename_len = strlen(dev_dirent->d_name);
+			size_t srcpath_len = sd_root_path_len + 1 + filename_len;
+
+			if (srcpath_len > maxlen) {
+				PX4_WARN("file: srcpath '%s%s' too long", sd_root_path, dev_dirent->d_name);
+				continue;
+			}
+
+			snprintf(srcpath, sizeof(srcpath), "%s%s", sd_root_path, dev_dirent->d_name);
+
+			if (uavcan_posix::FirmwareVersionChecker::getFileInfo(srcpath, descriptor, 1024) != 0) {
+				continue;
+			}
+
+			if (descriptor.image_crc == 0) {
+				continue;
+			}
+
+			snprintf(dstpath, sizeof(dstpath), "%s/%d.bin", sd_path, descriptor.board_id);
+
+			if (copyFw(dstpath, srcpath) >= 0) {
+				unlink(srcpath);
+			}
+		}
+	}
+
+	if (dev_dirent != nullptr) {
+		(void)closedir(dev_dirent);
+	}
 }
 
 int
